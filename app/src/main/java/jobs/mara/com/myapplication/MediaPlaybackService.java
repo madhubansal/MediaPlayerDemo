@@ -60,7 +60,6 @@ public class MediaPlaybackService extends Service implements MediaPlayer.OnPrepa
                 mediaPlayer = new MediaPlayer();
                 mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
                 mediaPlayer.setDataSource(url);
-                // might take long! (for buffering, etc)
                 mediaPlayer.prepareAsync();
                 mediaPlayer.setOnPreparedListener(this);
                 mediaPlayer.setOnCompletionListener(this);
