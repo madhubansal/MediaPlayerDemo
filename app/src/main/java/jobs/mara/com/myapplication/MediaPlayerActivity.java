@@ -58,8 +58,10 @@ public class MediaPlayerActivity extends AppCompatActivity implements View.OnCli
         playerseek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
-                setStartTime(i);
-                mMediaPlaybackService.seekMediaPlayer(i);
+                if (b) {
+                    setStartTime(i);
+                    mMediaPlaybackService.seekMediaPlayer(i);
+                }
             }
 
             @Override
@@ -105,18 +107,23 @@ public class MediaPlayerActivity extends AppCompatActivity implements View.OnCli
 
 
     public void setStartTime(int data) {
-        int seconds =  (data / 1000) % 60;
-        int minutes =  ((data / (1000 * 60)) % 60);
+        int seconds = (data / 1000) % 60;
+        int minutes = ((data / (1000 * 60)) % 60);
         startTime.setText(minutes + ":" + seconds);
         playerseek.setProgress(data);
     }
 
     @Override
     public void updateEndTime(int time) {
-        int seconds =  (time / 1000) % 60;
-        int minutes =  ((time / (1000 * 60)) % 60);
+        int seconds = (time / 1000) % 60;
+        int minutes = ((time / (1000 * 60)) % 60);
         endTime.setText(minutes + ":" + seconds);
         playerseek.setProgress(0);
         playerseek.setMax(time);
+    }
+
+    @Override
+    public void updateSeekBuffered(int data) {
+        playerseek.setSecondaryProgress(data);
     }
 }

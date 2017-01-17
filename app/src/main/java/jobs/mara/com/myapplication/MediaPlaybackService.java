@@ -7,7 +7,7 @@ import android.content.Intent;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.Binder;
-import android.os.Handler;
+import android.os.CountDownTimer;
 import android.os.IBinder;
 import android.support.annotation.Nullable;
 import android.util.Log;
@@ -15,32 +15,36 @@ import android.util.Log;
 /**
  * Created by mithilesh on 16/1/17.
  */
-public class MediaPlaybackService extends Service implements MediaPlayer.OnPreparedListener, MediaPlayer.OnCompletionListener {
+public class MediaPlaybackService extends Service implements MediaPlayer.OnPreparedListener, MediaPlayer.OnCompletionListener, MediaPlayer.OnBufferingUpdateListener {
 
 
     //    public static MediaPlaybackService mMediaPlaybackService;
     private final IBinder mBinder = new LocalBinder();
     //    private MediaSessionCompat mMediaSession;
 //    private PlaybackStateCompat.Builder mStateBuilder;
+    CountDownTimer cTimer = null;
     Context context;
     String LOG_TAG = "MediaPlaybackService";
     String url = "http://hcmaslov.d-real.sci-nnov.ru/public/mp3/Mika/Mika%20'Grace%20Kelly'.mp3"; // your URL here
     MediaPlayer mediaPlayer;
     Callbacks activity;
-    Handler handler = new Handler();
+    long remainingTime = 0;
+    //    Handler handler = new Handler();
     private int startTime = 0;
     private int endTime = 0;
     private int millis = 0;
-    Runnable serviceRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (millis < endTime) {
-                millis = millis + 1000;
-                activity.updateTime(millis); //Update Activity (client) by the implementd callback
-                handler.postDelayed(this, 1000);
-            }
-        }
-    };
+    private int mBufferPosition;
+
+//    Runnable serviceRunnable = new Runnable() {
+//        @Override
+//        public void run() {
+//            if (millis < endTime) {
+//                millis = millis + 1000;
+//                activity.updateTime(millis); //Update Activity (client) by the implementd callback
+//                handler.postDelayed(this, 1000);
+//            }
+//        }
+//    };
 
 
 //    public static MediaPlaybackService getInstance() {
@@ -53,7 +57,7 @@ public class MediaPlaybackService extends Service implements MediaPlayer.OnPrepa
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.v(LOG_TAG, "onStartCommand");
+        Log.e(LOG_TAG, "onStartCommand");
 
         if (mediaPlayer == null) {
             try {
@@ -63,6 +67,7 @@ public class MediaPlaybackService extends Service implements MediaPlayer.OnPrepa
                 mediaPlayer.prepareAsync();
                 mediaPlayer.setOnPreparedListener(this);
                 mediaPlayer.setOnCompletionListener(this);
+                mediaPlayer.setOnBufferingUpdateListener(this);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -72,17 +77,25 @@ public class MediaPlaybackService extends Service implements MediaPlayer.OnPrepa
 
 
     public void playMedia() {
+        Log.e("","PlayMedia");
+        startCounter(endTime, 100);
         mediaPlayer.start();
     }
 
     public void seekMediaPlayer(int time) {
+        Log.e("","seekMediaPlayer");
         millis = time;
+        cancelTimer();
+        startCounter(time, 100);
+
         mediaPlayer.seekTo(time);
     }
 
 
     public void pauseMedia() {
-        handler.removeCallbacks(serviceRunnable);
+        Log.e("","pauseMedia");
+//        handler.removeCallbacks(serviceRunnable);
+        cancelTimer();
 
         mediaPlayer.pause();
     }
@@ -90,7 +103,7 @@ public class MediaPlaybackService extends Service implements MediaPlayer.OnPrepa
     @Override
     public void onCreate() {
         super.onCreate();
-        Log.v(LOG_TAG, "onCreate");
+        Log.e(LOG_TAG, "onCreate");
         context = this;
 
 //        mMediaSession = new MediaSessionCompat(context, LOG_TAG);
@@ -108,11 +121,12 @@ public class MediaPlaybackService extends Service implements MediaPlayer.OnPrepa
 
     //Here Activity register to the service as Callbacks client
     public void registerClient(Activity a) {
+        Log.e(LOG_TAG, "registerClient");
         this.activity = (Callbacks) a;
     }
 
     public void onDestroy() {
-        Log.v(LOG_TAG, "onDestroy");
+        Log.e(LOG_TAG, "onDestroy");
         if (mediaPlayer.isPlaying()) {
             mediaPlayer.stop();
         }
@@ -127,23 +141,78 @@ public class MediaPlaybackService extends Service implements MediaPlayer.OnPrepa
 
     @Override
     public void onPrepared(MediaPlayer mediaPlayer) {
-        Log.v(LOG_TAG, "onPrepared");
+        Log.e(LOG_TAG, "onPrepared");
         mediaPlayer.start();
 
         System.out.println("mediaPlayer.getDuration():  " + mediaPlayer.getDuration());
         endTime = mediaPlayer.getDuration();
-        handler.postDelayed(serviceRunnable, 0);
+        remainingTime = endTime;
+//        handler.postDelayed(serviceRunnable, 0);
+        startCounter(remainingTime, 100);
         activity.updateEndTime(mediaPlayer.getDuration());
     }
 
     @Override
     public void onCompletion(MediaPlayer mediaPlayer) {
         Log.v(LOG_TAG, "onCompletion");
+        cancelTimer();
         stopSelf();
 
     }
 
+    private void startCounter(long millisInFuture,
+                              long countDownInterval) {
+        Log.e(LOG_TAG, "startCounter");
+        cTimer = new CountDownTimer(millisInFuture,
+                countDownInterval) {
+            public void onTick(long millisUntilFinished) {
+                remainingTime = millisUntilFinished;
+                if (millisUntilFinished > 0) {
+                    millis = millis + 100;
+                    System.out.println("millis: "+millis);
+                    activity.updateTime(millis); //Update Activity (client) by the implementd callback
+
+                }
+            }
+
+            public void onFinish() {
+
+            }
+        };
+        cTimer.start();
+    }
+
+    void cancelTimer() {
+        Log.e(LOG_TAG, "cancelTimer");
+
+        if (cTimer != null)
+            cTimer.cancel();
+    }
+
+    public int getMusicDuration() {
+        return mediaPlayer.getDuration();
+    }
+
+
+    @Override
+    public void onBufferingUpdate(MediaPlayer mediaPlayer, int i) {
+        setBufferPosition(i * getMusicDuration() / 100);
+
+    }
+
+    protected void setBufferPosition(int progress) {
+        mBufferPosition = progress;
+        activity.updateSeekBuffered(mBufferPosition);
+    }
+
+    public int getBufferPercentage() {
+        return mBufferPosition;
+    }
+
     public interface Callbacks {
+
+        public void updateSeekBuffered(int data);
+
         public void updateTime(int data);
 
         public void updateEndTime(int data);
@@ -154,6 +223,7 @@ public class MediaPlaybackService extends Service implements MediaPlayer.OnPrepa
             return MediaPlaybackService.this;
         }
     }
+
 
 //    @Nullable
 //    @Override
